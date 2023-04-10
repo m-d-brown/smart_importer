@@ -31,8 +31,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+class ModelAttribute:
+    """ModelAttribute is an attribute name with weight using to construct a model."""
+
+    def __init__(self, name: str, weight: float):
+        self.name = name
+        self.weight = weight
+
+
 class EntryPredictor(ImporterHook):
     """Base class for machine learning importer helpers.
+
+    attribute is the target attribute to predict.
 
     Args:
         predict: Whether to add predictions to the entries.
@@ -45,7 +55,7 @@ class EntryPredictor(ImporterHook):
 
     # pylint: disable=too-many-instance-attributes
 
-    weights: dict[str, float] = {}
+    model_attributes: list[ModelAttribute] = None
     attribute: str | None = None
 
     def __init__(
@@ -149,16 +159,18 @@ class EntryPredictor(ImporterHook):
         ]
 
     def define_pipeline(self):
-        """Defines the machine learning pipeline based on given weights."""
+        """Defines the machine learning pipeline using the model attributes."""
 
         transformers = [
-            (attribute, get_pipeline(attribute, self.string_tokenizer))
-            for attribute in self.weights
+            (a.name, get_pipeline(a.name, self.string_tokenizer))
+            for a in self.model_attributes
         ]
 
+        weights = dict((a.name, a.weight) for a in self.model_attributes)
         self.pipeline = make_pipeline(
             FeatureUnion(
-                transformer_list=transformers, transformer_weights=self.weights
+                transformer_list=transformers,
+                transformer_weights=weights
             ),
             SVC(kernel="linear"),
         )
