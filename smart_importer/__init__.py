@@ -1,28 +1,28 @@
 """Smart importer for Beancount and Fava."""
 from smart_importer.entries import update_postings
 from smart_importer.hooks import apply_hooks  # noqa
-from smart_importer.predictor import EntryPredictor, ModelAttribute
+from smart_importer.predictor import EntryPredictor
+from smart_importer.pipelines import NumericAttribute, StringAttribute
+
+
+COMMON_MODEL = [
+    StringAttribute("narration", 0.8),
+    StringAttribute("payee", 0.5),
+    NumericAttribute("date.day", 0.1),
+]
 
 
 class PredictPayees(EntryPredictor):
     """Predicts payees."""
 
     attribute = "payee"
-    model_attributes = [
-        ModelAttribute("narration", 0.8),
-        ModelAttribute("payee", 0.5),
-        ModelAttribute("date.day", 0.1),
-    ]
+    model_attributes = COMMON_MODEL
 
 
 class PredictPostings(EntryPredictor):
     """Predicts posting accounts."""
 
-    model_attributes = [
-        ModelAttribute("narration", 0.8),
-        ModelAttribute("payee", 0.5),
-        ModelAttribute("date.day", 0.1),
-    ]
+    model_attributes = COMMON_MODEL
 
     @property
     def targets(self):

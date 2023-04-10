@@ -23,20 +23,12 @@ from smart_importer.entries import (
     set_entry_attribute,
 )
 from smart_importer.hooks import ImporterHook
-from smart_importer.pipelines import get_pipeline
+from smart_importer.pipelines import ModelAttribute
 
 if TYPE_CHECKING:
     from sklearn import Pipeline
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-
-class ModelAttribute:
-    """ModelAttribute is an attribute name with weight using to construct a model."""
-
-    def __init__(self, name: str, weight: float):
-        self.name = name
-        self.weight = weight
 
 
 class EntryPredictor(ImporterHook):
@@ -55,7 +47,7 @@ class EntryPredictor(ImporterHook):
 
     # pylint: disable=too-many-instance-attributes
 
-    model_attributes: list[ModelAttribute] = None
+    model_attributes: list[ModelAttribute] = []
     attribute: str | None = None
 
     def __init__(
@@ -162,15 +154,14 @@ class EntryPredictor(ImporterHook):
         """Defines the machine learning pipeline using the model attributes."""
 
         transformers = [
-            (a.name, get_pipeline(a.name, self.string_tokenizer))
+            (a.name, a.create_pipeline(self.string_tokenizer))
             for a in self.model_attributes
         ]
 
         weights = dict((a.name, a.weight) for a in self.model_attributes)
         self.pipeline = make_pipeline(
             FeatureUnion(
-                transformer_list=transformers,
-                transformer_weights=weights
+                transformer_list=transformers, transformer_weights=weights
             ),
             SVC(kernel="linear"),
         )

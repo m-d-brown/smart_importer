@@ -19,41 +19,43 @@ class NoFitMixin:
         return self
 
 
-def txn_attr_getter(attribute_name: str):
+def txn_attr_getter(attribute_name: str, default=None):
     """Return attribute getter for a transaction that also handles metadata."""
     if attribute_name.startswith("meta."):
         meta_attr = attribute_name[5:]
 
         def getter(txn):
-            return txn.meta.get(meta_attr)
+            return txn.meta.get(meta_attr) or default
 
         return getter
-    return operator.attrgetter(attribute_name)
+
+    def base_getter(txn):
+        get = operator.attrgetter(attribute_name)
+        return get(txn) or default
+
+    return base_getter
 
 
-class NumericTxnAttribute(BaseEstimator, TransformerMixin, NoFitMixin):
+class NumericEstimator(BaseEstimator, TransformerMixin, NoFitMixin):
     """Get a numeric transaction attribute and vectorize."""
 
-    def __init__(self, attr: str):
-        self.attr = attr
-        self._txn_getter = txn_attr_getter(attr)
+    def __init__(self, txn_to_data):
+        self.txn_to_data = txn_to_data
 
-    def transform(self, data: list[Transaction], _y=None):
+    def transform(self, txns: list[Transaction], _y=None):
         """Return list of entry attributes."""
-        return numpy.array([self._txn_getter(d) for d in data], ndmin=2).T
+        return numpy.array([self.txn_to_data(t) for t in txns], ndmin=2).T
 
 
-class AttrGetter(BaseEstimator, TransformerMixin, NoFitMixin):
+class StringEstimator(BaseEstimator, TransformerMixin, NoFitMixin):
     """Get a string transaction attribute."""
 
-    def __init__(self, attr: str, default: str | None = None):
-        self.attr = attr
-        self.default = default
-        self._txn_getter = txn_attr_getter(attr)
+    def __init__(self, txn_to_data):
+        self.txn_to_data = txn_to_data
 
-    def transform(self, data: list[Transaction], _y=None):
+    def transform(self, txns: list[Transaction], _y=None):
         """Return list of entry attributes."""
-        return [self._txn_getter(d) or self.default for d in data]
+        return [self.txn_to_data(t) for t in txns]
 
 
 class StringVectorizer(CountVectorizer):
@@ -75,13 +77,30 @@ class StringVectorizer(CountVectorizer):
             return numpy.zeros(shape=(len(raw_documents), 0))
 
 
-def get_pipeline(attribute: str, tokenizer):
-    """Make a pipeline for a given entry attribute."""
+class ModelAttribute:
+    """ModelAttribute has a weight and creates a training pipeline."""
 
-    if attribute.startswith("date."):
-        return NumericTxnAttribute(attribute)
+    def __init__(self, name: str, weight: float):
+        self.name = name
+        self.weight = weight
 
-    # Treat all other attributes as strings.
-    return make_pipeline(
-        AttrGetter(attribute, default=""), StringVectorizer(tokenizer)
-    )
+    def create_pipeline(self, tokenizer):
+        """Returns an sklearn Pipeline."""
+        raise NotImplementedError
+
+
+class NumericAttribute(ModelAttribute):
+    """An attribute for numbers, like day-of-the-month."""
+
+    def create_pipeline(self, tokenizer):
+        return NumericEstimator(txn_attr_getter(self.name))
+
+
+class StringAttribute(ModelAttribute):
+    """An attribute for strings, like payee or narration."""
+
+    def create_pipeline(self, tokenizer):
+        return make_pipeline(
+            StringEstimator(txn_attr_getter(self.name, default="")),
+            StringVectorizer(tokenizer),
+        )
