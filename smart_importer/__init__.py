@@ -2,12 +2,11 @@
 from smart_importer.entries import update_postings
 from smart_importer.hooks import apply_hooks  # noqa
 from smart_importer.predictor import EntryPredictor
-from smart_importer.pipelines import NumericAttribute, StringAttribute
+from smart_importer.pipelines import NumericAttribute, ConcatAttribute
 
 
 COMMON_MODEL = [
-    StringAttribute("narration", 0.8),
-    StringAttribute("payee", 0.5),
+    ConcatAttribute(["payee", "narration"], 0.5),
     NumericAttribute("date.day", 0.1),
 ]
 

@@ -19,21 +19,22 @@ class NoFitMixin:
         return self
 
 
+def get_txn_attr(txn: Transaction, attribute_name: str, default=None):
+    """Returns the named attribute from a Transaction."""
+    if attribute_name.startswith("meta."):
+        val = txn.meta.get(attribute_name[5:])
+    else:
+        val = operator.attrgetter(attribute_name)(txn)
+    return val or default
+
+
 def txn_attr_getter(attribute_name: str, default=None):
     """Return attribute getter for a transaction that also handles metadata."""
-    if attribute_name.startswith("meta."):
-        meta_attr = attribute_name[5:]
 
-        def getter(txn):
-            return txn.meta.get(meta_attr) or default
+    def getter(txn):
+        return get_txn_attr(txn, attribute_name, default=default)
 
-        return getter
-
-    def base_getter(txn):
-        get = operator.attrgetter(attribute_name)
-        return get(txn) or default
-
-    return base_getter
+    return getter
 
 
 class NumericEstimator(BaseEstimator, TransformerMixin, NoFitMixin):
@@ -62,7 +63,7 @@ class StringVectorizer(CountVectorizer):
     """Subclass of CountVectorizer that handles empty data."""
 
     def __init__(self, tokenizer=None):
-        super().__init__(ngram_range=(1, 3), tokenizer=tokenizer)
+        super().__init__(ngram_range=(1, 4), tokenizer=tokenizer)
 
     def fit_transform(self, raw_documents: list[str], y=None):
         try:
@@ -102,5 +103,32 @@ class StringAttribute(ModelAttribute):
     def create_pipeline(self, tokenizer):
         return make_pipeline(
             StringEstimator(txn_attr_getter(self.name, default="")),
+            StringVectorizer(tokenizer),
+        )
+
+
+class ConcatAttribute(ModelAttribute):
+    """An attribute that concatenates multiple string fields."""
+
+    def __init__(self, attributes: list[str], weight: float):
+        super().__init__("-".join(attributes), weight)
+        self.attributes = attributes
+
+    def _get_data(self, txn):
+        parts = []
+        for attr in self.attributes:
+            val = get_txn_attr(txn, attr)
+            if val:
+                # Provide a header to allow some n-grams that can help
+                # improve prediction quality if the source field is
+                # important.
+                #parts.append(f"{attr}")
+                parts.append(val)
+        print('|', ' '.join(p.account for p in txn.postings), "|", " ".join(parts))
+        return " ".join(parts)
+
+    def create_pipeline(self, tokenizer):
+        return make_pipeline(
+            StringEstimator(self._get_data),
             StringVectorizer(tokenizer),
         )

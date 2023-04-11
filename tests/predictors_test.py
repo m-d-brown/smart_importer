@@ -110,7 +110,7 @@ ACCOUNT_PREDICTIONS = [
     "Expenses:Food:Groceries",
     "Expenses:Food:Groceries",
     "Expenses:Food:Restaurant",
-    "Expenses:Food:Restaurant",
+    "Expenses:Food:Restaurant", #### Gas
     "Expenses:Food:Groceries",
     "Expenses:Food:Coffee",
     "Expenses:Food:Groceries",
